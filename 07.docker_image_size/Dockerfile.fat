@@ -1,0 +1,7 @@
+# The "just works" version: the full Debian-based Python image (compilers and all)
+FROM python:3.12
+WORKDIR /app
+COPY app/requirements.txt .
+RUN pip install -r requirements.txt
+COPY app/main.py .
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

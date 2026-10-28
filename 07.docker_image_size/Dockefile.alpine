@@ -1,0 +1,9 @@
+# Same app on Alpine (musl libc, BusyBox, apk)
+FROM python:3.12-alpine
+WORKDIR /app
+COPY app/requirements.txt .
+RUN mkdir data
+RUN echo "Hi How Are You ? " >> data/topic.txt
+RUN pip install --no-cache-dir -r requirements.txt
+COPY app/main.py .
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,0 +1,23 @@
+# Stage 1 "builder": has pip and compilers. Thrown away at the end.
+FROM python:3.12-slim AS builder
+WORKDIR /build
+# Many Python packages compile C code when they install. Our two packages don't need this,
+# but real projects often do, and these tools should never reach production.
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/*
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+COPY app/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Stage 2 "runtime": only the finished virtual environment and your code
+FROM python:3.12-alpine AS runtime
+# RUN useradd --system --create-home --uid 10001 appuser
+WORKDIR /app
+COPY --from=builder /opt/venv /opt/venv
+COPY app/main.py .
+ENV PATH="/opt/venv/bin:$PATH" PYTHONUNBUFFERED=1
+USER appuser
+EXPOSE 8000
+# Exec form: uvicorn is PID 1, so it receives SIGTERM directly
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

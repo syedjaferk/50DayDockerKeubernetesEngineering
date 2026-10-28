@@ -1,0 +1,21 @@
+# SHELL FORM: CMD is a plain string, so Docker runs it as `/bin/sh -c "uvicorn ..."`.
+# The shell is PID 1 and uvicorn is its child. `docker stop` signals only PID 1,
+# the shell has no SIGTERM handler, so the signal is lost and Docker falls back to SIGKILL.
+#
+# Build: docker build -f Dockerfile.shell -t demo:shell .
+# Run:   docker run -d --name demo-shell -p 8001:8000 demo:shell
+# Fix without editing the app:  docker run --init ... demo:shell
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+COPY app/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY app .
+
+RUN useradd --create-home appuser
+USER appuser
+
+EXPOSE 8000
+CMD uvicorn main:app --host 0.0.0.0 --port 8000

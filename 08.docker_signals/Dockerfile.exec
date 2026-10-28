@@ -1,0 +1,20 @@
+# EXEC FORM: CMD is a JSON list, so Docker runs uvicorn directly.
+# uvicorn is PID 1, receives SIGTERM from `docker stop` and shuts down gracefully.
+#
+# Build: docker build -f Dockerfile.exec -t demo:exec .
+# Run:   docker run -d --name demo-exec -p 8000:8000 demo:exec
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+COPY app/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY app/main.py .
+
+# Don't run as root
+RUN useradd --create-home appuser
+USER appuser
+
+EXPOSE 8000
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

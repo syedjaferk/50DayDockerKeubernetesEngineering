@@ -1,0 +1,31 @@
+docker network create shop-net
+docker volume create pgdata
+
+docker run -d --name db --network shop-net -v pgdata:/var/lib/postgresql/data \
+  -e POSTGRES_USER=shop -e POSTGRES_PASSWORD=secret -e POSTGRES_DB=shop \
+  postgres:16-alpine
+
+docker run -d --name redis --network shop-net redis:7-alpine
+
+docker build -t shop-app ./app
+
+docker run -d --name api --network shop-net -p 8000:8000 \
+  -e DATABASE_URL=postgresql://shop:secret@db:5432/shop \
+  -e REDIS_URL=redis://redis:6379/0 \
+  shop-app
+
+docker run -d --name worker --network shop-net \
+  -e DATABASE_URL=postgresql://shop:secret@db:5432/shop \
+  -e REDIS_URL=redis://redis:6379/0 \
+  shop-app celery -A worker worker --loglevel=info --concurrency=2
+
+
+
+docker exec api getent hosts db redis
+docker exec db psql -U shop -d shop -c "SELECT id, n, status, result FROM jobs;"
+docker exec redis redis-cli get visits
+
+docker rm -f api worker db redis
+docker network rm shop-net
+docker volume rm pgdata
+docker rmi shop-app

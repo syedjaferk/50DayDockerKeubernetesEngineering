@@ -1,0 +1,15 @@
+# Build the packages with the SAME Python version that the distroless image ships (3.11 on Debian 12)
+FROM python:3.11-slim-bookworm AS builder
+WORKDIR /build
+COPY app/requirements.txt .
+RUN pip install --no-cache-dir --target=/packages -r requirements.txt
+
+# No shell, no package manager, no pip: just Python and your files
+FROM gcr.io/distroless/python3-debian12:nonroot
+WORKDIR /app
+COPY --from=builder /packages /packages
+COPY app/main.py .
+ENV PYTHONPATH=/packages PYTHONUNBUFFERED=1
+EXPOSE 8000
+# distroless python's ENTRYPOINT is already "python3", so CMD is just the arguments
+CMD ["-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
