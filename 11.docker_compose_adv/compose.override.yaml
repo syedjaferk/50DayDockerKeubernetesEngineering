@@ -1,0 +1,6 @@
+# Read automatically on top of compose.yaml by `docker compose up` (development only).
+services:
+  api:
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./app:/app

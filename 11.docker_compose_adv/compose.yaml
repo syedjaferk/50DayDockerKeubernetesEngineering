@@ -1,0 +1,110 @@
+x-app: &app                      # a reusable block (YAML anchor)
+  build: ./app
+  restart: unless-stopped
+  init: true                     # a tiny PID 1 that forwards signals and reaps zombies
+  environment: &app-env
+    DB_USER: ${DB_USER}
+    DB_NAME: ${DB_NAME}
+    DB_PASSWORD_FILE: /run/secrets/db_password
+    REDIS_URL: redis://redis:6379/0
+  secrets:
+    - db_password
+
+services:
+  migrate:                       # one-shot: create tables, then exit
+    <<: *app
+    restart: "no"
+    command: python migrate.py
+    networks: [backend]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    <<: *app
+    ports:
+      - "8000:8000"
+    networks: [frontend, backend]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+
+  worker:
+    <<: *app
+    command: celery -A worker worker --loglevel=info --concurrency=2
+    networks: [backend]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A worker inspect ping -d celery@$$HOSTNAME"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks: [backend]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  adminer:                       # only starts with:  docker compose --profile debug up
+    image: adminer
+    profiles: [debug]
+    ports:
+      - "8081:8080"
+    networks: [frontend, backend]
+
+networks:
+  frontend:
+  backend:
+
+volumes:
+  pgdata:
+
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt

@@ -1,0 +1,5 @@
+fastapi==0.115.*
+uvicorn[standard]==0.32.*
+celery[redis]==5.4.*
+redis==5.2.*
+psycopg[binary]==3.2.*
